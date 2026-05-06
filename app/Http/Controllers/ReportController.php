@@ -33,14 +33,16 @@ class ReportController extends Controller
             $query->where('metode_bayar', $metodeBayar);
         }
 
-        $sales = $query->with('user')->orderBy('created_at', 'desc')->get();
+        $sales = $query->with(['user', 'details'])->orderBy('created_at', 'desc')->get();
 
         // Summary
         $totalPenjualan = $sales->sum('grand_total');
         $totalTunai = $sales->where('metode_bayar', 'tunai')->sum('grand_total');
         $totalNonTunai = $sales->where('metode_bayar', 'non_tunai')->sum('grand_total');
-        $totalHV = $sales->where('tipe_penjualan', 'reguler')->sum('grand_total');
-        $totalResep = $sales->where('tipe_penjualan', 'resep')->sum('grand_total');
+        // Calculate HV/Resep from sale_details tipe_harga
+        $saleIds = $sales->pluck('id');
+        $totalHV = \App\Models\SaleDetail::whereIn('sale_id', $saleIds)->where('tipe_harga', 'hv')->sum('subtotal');
+        $totalResep = \App\Models\SaleDetail::whereIn('sale_id', $saleIds)->where('tipe_harga', 'resep')->sum('subtotal');
         $jumlahTransaksi = $sales->count();
 
         return view('reports.sales', compact(

@@ -21,7 +21,7 @@
         }
     </style>
 </head>
-<body onload="window.print()">
+<body onload="if (window === window.top) { setTimeout(function(){ window.print(); }, 300); }">
     <div class="header center">
         <div class="bold" style="font-size: 14px;">APOTEK POS</div>
         <div>Jl. Contoh No. 123</div>
@@ -71,26 +71,16 @@
 
     <div class="double-line"></div>
 
-    @if($sale->tipe_penjualan === 'resep')
-    {{-- Resep: TIDAK tampilkan daftar obat, hanya total --}}
-    <div class="center" style="margin: 8px 0;">
-        <div class="bold">PENJUALAN RESEP</div>
-        <div style="font-size: 11px;">{{ $sale->details->count() }} item obat</div>
-    </div>
+    @php
+        $resepDetails = $sale->details->where('tipe_harga', 'resep');
+        $regulerDetails = $sale->details->where('tipe_harga', 'hv');
+        $resepTotal = $resepDetails->sum('subtotal');
+    @endphp
 
-    <div class="double-line"></div>
-
-    <table>
-        <tr class="bold">
-            <td style="font-size: 14px;">TOTAL</td>
-            <td class="right" style="font-size: 14px;">Rp {{ number_format($sale->grand_total, 0, ',', '.') }}</td>
-        </tr>
-    </table>
-    @else
-    {{-- Reguler: tampilkan daftar obat lengkap --}}
-    @foreach($sale->details as $detail)
+    {{-- Regular items: show individually --}}
+    @foreach($regulerDetails as $detail)
     <div style="margin-bottom: 3px;">
-        <div>{{ $detail->product->nama_barang }}</div>
+        <div>{{ $detail->product->nama_barang ?? '-' }}</div>
         <table>
             <tr>
                 <td>{{ $detail->jumlah }} x Rp {{ number_format($detail->harga_satuan, 0, ',', '.') }}</td>
@@ -102,6 +92,19 @@
         </table>
     </div>
     @endforeach
+
+    {{-- Resep items: show as single "Resep" line --}}
+    @if($resepDetails->count() > 0)
+    <div style="margin-bottom: 3px;">
+        <div>Resep{{ $sale->pasien_nama ? ' - ' . $sale->pasien_nama : '' }}</div>
+        <table>
+            <tr>
+                <td>1 x Rp {{ number_format($resepTotal, 0, ',', '.') }}</td>
+                <td class="right bold">Rp {{ number_format($resepTotal, 0, ',', '.') }}</td>
+            </tr>
+        </table>
+    </div>
+    @endif
 
     <div class="double-line"></div>
 
@@ -121,7 +124,6 @@
             <td class="right" style="font-size: 14px;">Rp {{ number_format($sale->grand_total, 0, ',', '.') }}</td>
         </tr>
     </table>
-    @endif
 
     <div class="line"></div>
 

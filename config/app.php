@@ -12,6 +12,10 @@ return [
     'faker_locale' => 'id_ID',
     'key' => env('APP_KEY'),
     'cipher' => 'AES-256-CBC',
+
+    // Demo Mode
+    'demo_mode' => (bool) env('DEMO_MODE', false),
+    'demo_reset_hours' => (int) env('DEMO_RESET_HOURS', 2),
     'maintenance' => [
         'driver' => 'file',
     ],

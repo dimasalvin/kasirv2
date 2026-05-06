@@ -72,6 +72,22 @@
                         Masuk
                     </button>
                 </form>
+
+                {{-- Demo Quick Login --}}
+                @if(config('app.demo_mode'))
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <p class="text-center text-sm text-gray-500 mb-3">Atau coba langsung:</p>
+                    <form method="POST" action="{{ url('/login') }}">
+                        @csrf
+                        <input type="hidden" name="username" value="admin">
+                        <input type="hidden" name="password" value="Admin123!">
+                        <button type="submit" class="w-full flex justify-center py-2.5 px-4 border-2 border-amber-500 rounded-lg text-sm font-medium text-amber-600 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-colors">
+                            <i class="fas fa-flask mr-2"></i>
+                            Masuk sebagai Demo (Admin)
+                        </button>
+                    </form>
+                </div>
+                @endif
             </div>
 
             <!-- Footer -->

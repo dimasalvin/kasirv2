@@ -18,7 +18,6 @@ class SaleController extends Controller
     public function pos()
     {
         $products = Product::where('is_active', true)
-            ->where('stok', '>', 0)
             ->orderBy('nama_barang')
             ->get();
 
@@ -31,15 +30,26 @@ class SaleController extends Controller
     public function processTransaction(Request $request)
     {
         $request->validate([
-            'items' => 'required|array|min:1',
+            'items' => 'nullable|array',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.jumlah' => 'required|integer|min:1',
             'items.*.tipe_harga' => 'required|in:hv,resep',
             'items.*.diskon_persen' => 'nullable|numeric|min:0|max:100',
+            'resep_groups' => 'nullable|array',
+            'resep_groups.*.items' => 'required|array|min:1',
+            'resep_groups.*.items.*.product_id' => 'required|exists:products,id',
+            'resep_groups.*.items.*.jumlah' => 'required|integer|min:1',
+            'resep_groups.*.pasien_nama' => 'required|string',
+            'resep_groups.*.total' => 'required|numeric|min:0',
             'bayar' => 'required|numeric|min:0',
             'metode_bayar' => 'required|in:tunai,non_tunai',
-            'tipe_penjualan' => 'required|in:reguler,resep',
+            'tipe_penjualan' => 'required|in:reguler',
         ]);
+
+        // Must have at least items or resep_groups
+        if (empty($request->items) && empty($request->resep_groups)) {
+            return response()->json(['success' => false, 'message' => 'Keranjang kosong.'], 422);
+        }
 
         DB::beginTransaction();
         try {
@@ -50,37 +60,44 @@ class SaleController extends Controller
             $hour = $now->hour;
             $shift = ($hour >= 7 && $hour < 14) ? 'pagi' : 'siang';
 
+            // Collect pasien data from first resep group (if any)
+            $resepGroups = $request->resep_groups ?? [];
+            $pasienNama = !empty($resepGroups) ? ($resepGroups[0]['pasien_nama'] ?? null) : null;
+            $pasienNoHp = !empty($resepGroups) ? ($resepGroups[0]['pasien_no_hp'] ?? null) : null;
+            $pasienAlamat = !empty($resepGroups) ? ($resepGroups[0]['pasien_alamat'] ?? null) : null;
+
             $sale = Sale::create([
                 'no_nota' => $noNota,
                 'tanggal' => $now->toDateString(),
                 'jam' => $now->toTimeString(),
                 'customer_id' => $request->customer_id,
                 'user_id' => auth()->id(),
-                'tipe_penjualan' => $request->tipe_penjualan,
+                'tipe_penjualan' => 'reguler',
                 'shift' => $shift,
                 'metode_bayar' => $request->metode_bayar,
                 'referensi_bayar' => $request->referensi_bayar,
                 'status' => 'completed',
                 'catatan' => $request->catatan,
                 'nama_dokter' => $request->nama_dokter,
-                'pasien_nama' => $request->pasien_nama,
-                'pasien_no_hp' => $request->pasien_no_hp,
-                'pasien_alamat' => $request->pasien_alamat,
+                'pasien_nama' => $pasienNama ?? $request->nama_pelanggan,
+                'pasien_no_hp' => $pasienNoHp,
+                'pasien_alamat' => $pasienAlamat,
             ]);
 
             $subtotal = 0;
             $diskonTotal = 0;
+            $hasStokMinus = false;
 
-            foreach ($request->items as $item) {
+            // Process regular HV items
+            foreach ($request->items ?? [] as $item) {
                 $product = Product::find($item['product_id']);
 
-                // Cek stok
+                // Track stok minus
                 if ($product->stok < $item['jumlah']) {
-                    throw new \Exception("Stok {$product->nama_barang} tidak mencukupi. Tersedia: {$product->stok}");
+                    $hasStokMinus = true;
                 }
 
-                // Tentukan harga berdasarkan tipe
-                $hargaSatuan = $item['tipe_harga'] === 'resep' ? $product->harga_resep : $product->harga_hv;
+                $hargaSatuan = $product->harga_hv;
                 $diskonPersen = $item['diskon_persen'] ?? 0;
                 $diskonNominal = ($hargaSatuan * $item['jumlah']) * ($diskonPersen / 100);
                 $itemSubtotal = ($hargaSatuan * $item['jumlah']) - $diskonNominal;
@@ -93,14 +110,13 @@ class SaleController extends Controller
                     'diskon_persen' => $diskonPersen,
                     'diskon_nominal' => $diskonNominal,
                     'subtotal' => $itemSubtotal,
-                    'tipe_harga' => $item['tipe_harga'],
+                    'tipe_harga' => 'hv',
                 ]);
 
                 // Kurangi stok
                 $stokSebelum = $product->stok;
                 $product->decrement('stok', $item['jumlah']);
 
-                // Catat kartu stok
                 StockCard::create([
                     'product_id' => $product->id,
                     'tipe' => 'keluar',
@@ -116,6 +132,57 @@ class SaleController extends Controller
                 $diskonTotal += $diskonNominal;
             }
 
+            // Process resep groups — each group becomes individual product deductions
+            foreach ($resepGroups as $group) {
+                $resepTotal = 0;
+                $groupDiskonPersen = $group['diskon_persen'] ?? 0;
+
+                foreach ($group['items'] as $resepItem) {
+                    $product = Product::find($resepItem['product_id']);
+
+                    // Track stok minus
+                    if ($product->stok < $resepItem['jumlah']) {
+                        $hasStokMinus = true;
+                    }
+
+                    $hargaSatuan = $resepItem['harga_satuan'] ?? $product->harga_resep;
+                    $itemGross = $hargaSatuan * $resepItem['jumlah'];
+                    $itemDiskonNominal = $itemGross * ($groupDiskonPersen / 100);
+                    $itemSubtotal = $itemGross - $itemDiskonNominal;
+
+                    SaleDetail::create([
+                        'sale_id' => $sale->id,
+                        'product_id' => $resepItem['product_id'],
+                        'jumlah' => $resepItem['jumlah'],
+                        'harga_satuan' => $hargaSatuan,
+                        'diskon_persen' => $groupDiskonPersen,
+                        'diskon_nominal' => $itemDiskonNominal,
+                        'subtotal' => $itemSubtotal,
+                        'tipe_harga' => 'resep',
+                    ]);
+
+                    // Kurangi stok
+                    $stokSebelum = $product->stok;
+                    $product->decrement('stok', $resepItem['jumlah']);
+
+                    StockCard::create([
+                        'product_id' => $product->id,
+                        'tipe' => 'keluar',
+                        'jumlah' => $resepItem['jumlah'],
+                        'stok_sebelum' => $stokSebelum,
+                        'stok_sesudah' => $stokSebelum - $resepItem['jumlah'],
+                        'referensi' => $noNota,
+                        'keterangan' => 'Penjualan Resep - ' . ($group['pasien_nama'] ?? ''),
+                        'user_id' => auth()->id(),
+                    ]);
+
+                    $resepTotal += $itemGross;
+                    $diskonTotal += $itemDiskonNominal;
+                }
+
+                $subtotal += $resepTotal;
+            }
+
             $grandTotal = $subtotal - $diskonTotal;
             $kembalian = $request->bayar - $grandTotal;
 
@@ -129,6 +196,7 @@ class SaleController extends Controller
                 'grand_total' => round($grandTotal),
                 'bayar' => round($request->bayar),
                 'kembalian' => max(0, round($kembalian)),
+                'has_stok_minus' => $hasStokMinus,
             ]);
 
             // Catat cash flow
@@ -165,7 +233,7 @@ class SaleController extends Controller
     // Daftar penjualan
     public function index(Request $request)
     {
-        $query = Sale::with(['customer', 'user']);
+        $query = Sale::with(['customer', 'user', 'details']);
 
         if ($request->filled('search')) {
             $query->where('no_nota', 'like', "%{$request->search}%");
@@ -180,7 +248,10 @@ class SaleController extends Controller
         }
 
         if ($request->filled('tipe_penjualan')) {
-            $query->where('tipe_penjualan', $request->tipe_penjualan);
+            $tipe = $request->tipe_penjualan;
+            $query->whereHas('details', function ($q) use ($tipe) {
+                $q->where('tipe_harga', $tipe === 'resep' ? 'resep' : 'hv');
+            });
         }
 
         if ($request->filled('metode_bayar')) {
@@ -262,8 +333,7 @@ class SaleController extends Controller
             return response()->json([]);
         }
 
-        $pasiens = Sale::where('tipe_penjualan', 'resep')
-            ->whereNotNull('pasien_nama')
+        $pasiens = Sale::whereNotNull('pasien_nama')
             ->where('pasien_nama', '!=', '')
             ->where('pasien_nama', 'like', "%{$query}%")
             ->select('pasien_nama', 'pasien_no_hp', 'pasien_alamat')

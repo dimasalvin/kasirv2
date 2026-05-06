@@ -263,6 +263,16 @@
 </head>
 <body class="h-full bg-gray-50 dark:bg-gray-900 transition-colors duration-200"
       x-data="appShell()" x-init="initApp()">
+    
+    {{-- Demo Mode Banner --}}
+    @if(config('app.demo_mode'))
+    <div class="bg-amber-500 text-white text-center py-1.5 text-sm font-medium no-print relative z-50">
+        <i class="fas fa-flask mr-1"></i>
+        <span>Demo Mode — Data direset otomatis setiap {{ config('app.demo_reset_hours') }} jam.</span>
+        <span class="hidden sm:inline ml-1">Silakan coba semua fitur!</span>
+    </div>
+    @endif
+
     <div class="min-h-full flex">
         <!-- Sidebar -->
         @include('layouts.sidebar')

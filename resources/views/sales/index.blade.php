@@ -22,7 +22,7 @@
                 <label class="block text-xs text-gray-500 mb-1">Tipe</label>
                 <select name="tipe_penjualan" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                     <option value="">Semua</option>
-                    <option value="reguler" {{ request('tipe_penjualan') == 'reguler' ? 'selected' : '' }}>Reguler</option>
+                    <option value="reguler" {{ request('tipe_penjualan') == 'reguler' ? 'selected' : '' }}>HV</option>
                     <option value="resep" {{ request('tipe_penjualan') == 'resep' ? 'selected' : '' }}>Resep</option>
                 </select>
             </div>
@@ -72,10 +72,15 @@
                         <td class="py-3 px-4 text-gray-600">{{ $sale->tanggal->format('d/m/Y') }} {{ $sale->jam }}</td>
                         <td class="py-3 px-4 text-gray-600">{{ $sale->user->name ?? '-' }}</td>
                         <td class="py-3 px-4 text-center">
-                            @if($sale->tipe_penjualan == 'resep')
+                            @if($sale->details->where('tipe_harga', 'resep')->count() > 0 && $sale->details->where('tipe_harga', 'hv')->count() > 0)
+                                <span class="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs">HV+Resep</span>
+                            @elseif($sale->details->where('tipe_harga', 'resep')->count() > 0)
                                 <span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">Resep</span>
                             @else
-                                <span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">Reguler</span>
+                                <span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">HV</span>
+                            @endif
+                            @if($sale->has_stok_minus)
+                                <span class="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs ml-1" title="Transaksi dengan stok minus">⚠</span>
                             @endif
                         </td>
                         <td class="py-3 px-4 text-center">

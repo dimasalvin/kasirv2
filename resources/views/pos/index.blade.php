@@ -43,14 +43,74 @@
                             <div>
                                 <span class="text-sm font-medium" x-text="product.nama_barang"></span>
                                 <span class="text-xs text-gray-500 ml-2" x-text="product.kode_barang"></span>
+                                <span x-show="product.stok <= 0" class="ml-2 px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">HABIS</span>
                             </div>
                             <div class="text-right">
                                 <span class="text-xs text-gray-500">Stok: </span>
-                                <span class="text-xs font-medium" x-text="product.stok"></span>
+                                <span class="text-xs font-medium" :class="product.stok <= 0 ? 'text-red-600' : ''" x-text="product.stok"></span>
                                 <span class="text-sm font-medium text-indigo-600 ml-2" x-text="'Rp ' + formatNumber(product.harga_hv)"></span>
                             </div>
                         </div>
                     </template>
+                </div>
+            </div>
+
+            <!-- Resep Cart (temporary, only visible in resep mode) -->
+            <div x-show="modeResep && resepCart.length > 0" x-cloak class="bg-purple-50 rounded-xl shadow-sm border border-purple-200 overflow-hidden">
+                <div class="p-4 border-b border-purple-200 flex items-center justify-between">
+                    <h3 class="font-semibold text-purple-800">
+                        <i class="fas fa-prescription text-purple-500 mr-2"></i>
+                        Racikan Resep (<span x-text="resepCart.length"></span> obat)
+                    </h3>
+                    <button @click="clearResepCart()" class="text-sm text-red-600 hover:text-red-800">
+                        <i class="fas fa-trash mr-1"></i> Kosongkan
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-purple-100">
+                            <tr>
+                                <th class="text-left py-2 px-3 text-purple-700">Obat</th>
+                                <th class="text-right py-2 px-3 text-purple-700 w-28">Harga Resep</th>
+                                <th class="text-center py-2 px-3 text-purple-700 w-24">Qty</th>
+                                <th class="text-right py-2 px-3 text-purple-700 w-32">Subtotal</th>
+                                <th class="text-center py-2 px-3 text-purple-700 w-12"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(item, index) in resepCart" :key="index">
+                                <tr class="border-b border-purple-100 hover:bg-purple-50">
+                                    <td class="py-2 px-3">
+                                        <p class="font-medium text-gray-800" x-text="item.nama_barang"></p>
+                                        <p class="text-xs text-gray-500" x-text="item.kode_barang"></p>
+                                    </td>
+                                    <td class="py-2 px-3 text-right text-gray-800" x-text="'Rp ' + formatNumber(item.harga_satuan)"></td>
+                                    <td class="py-2 px-3 text-center">
+                                        <div class="flex items-center justify-center space-x-1">
+                                            <button @click="decreaseResepQty(index)" class="w-6 h-6 bg-purple-200 rounded text-xs hover:bg-purple-300">-</button>
+                                            <input type="number" x-model.number="item.jumlah" @change="calculateResepSubtotal(index)" min="1"
+                                                   class="w-12 text-center border border-purple-300 rounded text-xs py-1">
+                                            <button @click="increaseResepQty(index)" class="w-6 h-6 bg-purple-200 rounded text-xs hover:bg-purple-300">+</button>
+                                        </div>
+                                    </td>
+                                    <td class="py-2 px-3 text-right font-medium text-gray-800" x-text="'Rp ' + formatNumber(item.subtotal)"></td>
+                                    <td class="py-2 px-3 text-center">
+                                        <button @click="removeFromResepCart(index)" class="text-red-500 hover:text-red-700">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-4 border-t border-purple-200 flex items-center justify-between">
+                    <div class="text-sm text-purple-700">
+                        Total Resep: <span class="font-bold text-lg" x-text="'Rp ' + formatNumber(resepTotal)"></span>
+                    </div>
+                    <button @click="confirmResep()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium text-sm">
+                        <i class="fas fa-check mr-1"></i> Konfirmasi Resep
+                    </button>
                 </div>
             </div>
 
@@ -87,22 +147,23 @@
                                         <p class="text-xs text-gray-500" x-text="item.kode_barang"></p>
                                     </td>
                                     <td class="py-2 px-3 text-center">
-                                        <select x-model="item.tipe_harga" @change="updateItemPrice(index)"
-                                                :aria-label="'Tipe harga ' + item.nama_barang"
-                                                class="border border-gray-300 rounded px-2 py-1 text-xs">
-                                            <option value="hv">HV</option>
-                                            <option value="resep">Resep</option>
-                                        </select>
+                                        <span class="text-xs px-2 py-1 rounded bg-indigo-100 text-indigo-700" x-show="!item.is_resep">HV</span>
+                                        <span class="text-xs px-2 py-1 rounded bg-purple-100 text-purple-700" x-show="item.is_resep">Resep</span>
                                     </td>
                                     <td class="py-2 px-3 text-right text-gray-800" x-text="'Rp ' + formatNumber(item.harga_satuan)"></td>
                                     <td class="py-2 px-3 text-center">
-                                        <div class="flex items-center justify-center space-x-1">
-                                            <button @click="decreaseQty(index)" class="w-6 h-6 bg-gray-200 rounded text-xs hover:bg-gray-300" :aria-label="'Kurangi qty ' + item.nama_barang">-</button>
-                                            <input type="number" x-model.number="item.jumlah" @change="calculateSubtotal(index)" min="1" :max="item.stok"
-                                                   :aria-label="'Jumlah ' + item.nama_barang"
-                                                   class="w-12 text-center border border-gray-300 rounded text-xs py-1">
-                                            <button @click="increaseQty(index)" class="w-6 h-6 bg-gray-200 rounded text-xs hover:bg-gray-300" :aria-label="'Tambah qty ' + item.nama_barang">+</button>
-                                        </div>
+                                        <template x-if="!item.is_resep">
+                                            <div class="flex items-center justify-center space-x-1">
+                                                <button @click="decreaseQty(index)" class="w-6 h-6 bg-gray-200 rounded text-xs hover:bg-gray-300" :aria-label="'Kurangi qty ' + item.nama_barang">-</button>
+                                                <input type="number" x-model.number="item.jumlah" @change="calculateSubtotal(index)" min="1"
+                                                       :aria-label="'Jumlah ' + item.nama_barang"
+                                                       class="w-12 text-center border border-gray-300 rounded text-xs py-1">
+                                                <button @click="increaseQty(index)" class="w-6 h-6 bg-gray-200 rounded text-xs hover:bg-gray-300" :aria-label="'Tambah qty ' + item.nama_barang">+</button>
+                                            </div>
+                                        </template>
+                                        <template x-if="item.is_resep">
+                                            <span class="text-xs text-purple-600 font-medium">1</span>
+                                        </template>
                                     </td>
                                     <td class="py-2 px-3 text-center">
                                         <div class="flex items-center justify-center gap-0.5">
@@ -139,62 +200,65 @@
 
         <!-- Right: Payment Panel -->
         <div class="space-y-4">
-            <!-- Tipe Penjualan -->
+            <!-- Mode Input -->
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Tipe Penjualan</label>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Mode Input</label>
                 <div class="grid grid-cols-2 gap-2">
-                    <button @click="tipePenjualan = 'reguler'" 
-                            :class="tipePenjualan === 'reguler' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'"
+                    <button @click="modeResep = false" 
+                            :class="!modeResep ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'"
                             class="py-2 rounded-lg text-sm font-medium transition-colors">
                         <i class="fas fa-store mr-1"></i> Reguler (HV)
                     </button>
-                    <button @click="tipePenjualan = 'resep'; setAllToResep()" 
-                            :class="tipePenjualan === 'resep' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700'"
+                    <button @click="modeResep = true" 
+                            :class="modeResep ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700'"
                             class="py-2 rounded-lg text-sm font-medium transition-colors">
                         <i class="fas fa-prescription mr-1"></i> Resep
                     </button>
                 </div>
 
-                <!-- Data Pasien Resep (autocomplete) -->
-                <div x-show="tipePenjualan === 'resep'" x-cloak class="mt-3 space-y-2">
+                <!-- Info Resep Mode -->
+                <div x-show="modeResep" x-cloak class="mt-3">
                     <div class="bg-purple-50 rounded-lg p-2 mb-2">
-                        <p class="text-xs text-purple-700"><i class="fas fa-info-circle mr-1"></i> Ketik nama pasien, data akan otomatis terisi jika sudah pernah terdaftar.</p>
+                        <p class="text-xs text-purple-700"><i class="fas fa-info-circle mr-1"></i> Pilih obat resep, lalu klik "Konfirmasi Resep" untuk memasukkan ke keranjang sebagai 1 item Resep.</p>
                     </div>
-                    <div class="relative">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Nama Pasien <span class="text-red-500">*</span></label>
-                        <input type="text" x-model="pasienNama" @input.debounce.300ms="searchPasien()" @focus="showPasienDropdown = true"
-                               placeholder="Ketik nama pasien..."
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                        <!-- Autocomplete dropdown -->
-                        <div x-show="showPasienDropdown && pasienResults.length > 0" @click.away="showPasienDropdown = false" x-cloak
-                             class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                            <template x-for="(p, idx) in pasienResults" :key="idx">
-                                <div @click="selectPasien(p)" class="px-3 py-2 item-hover cursor-pointer border-b border-gray-50">
-                                    <p class="text-sm font-medium text-gray-800" x-text="p.pasien_nama"></p>
-                                    <p class="text-xs text-gray-500">
-                                        <span x-show="p.pasien_no_hp"><i class="fas fa-phone mr-1"></i><span x-text="p.pasien_no_hp"></span></span>
-                                        <span x-show="p.pasien_alamat" class="ml-2"><i class="fas fa-map-marker-alt mr-1"></i><span x-text="p.pasien_alamat"></span></span>
-                                    </p>
-                                </div>
-                            </template>
+                    <!-- Data Pasien Resep (autocomplete) -->
+                    <div class="space-y-2">
+                        <div class="relative">
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Nama Pasien <span class="text-red-500">*</span></label>
+                            <input type="text" x-model="pasienNama" @input.debounce.300ms="searchPasien()" @focus="showPasienDropdown = true"
+                                   placeholder="Ketik nama pasien..."
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                            <!-- Autocomplete dropdown -->
+                            <div x-show="showPasienDropdown && pasienResults.length > 0" @click.away="showPasienDropdown = false" x-cloak
+                                 class="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                                <template x-for="(p, idx) in pasienResults" :key="idx">
+                                    <div @click="selectPasien(p)" class="px-3 py-2 item-hover cursor-pointer border-b border-gray-50">
+                                        <p class="text-sm font-medium text-gray-800" x-text="p.pasien_nama"></p>
+                                        <p class="text-xs text-gray-500">
+                                            <span x-show="p.pasien_no_hp"><i class="fas fa-phone mr-1"></i><span x-text="p.pasien_no_hp"></span></span>
+                                            <span x-show="p.pasien_alamat" class="ml-2"><i class="fas fa-map-marker-alt mr-1"></i><span x-text="p.pasien_alamat"></span></span>
+                                        </p>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">No. HP Pasien</label>
-                        <input type="text" x-model="pasienNoHp" placeholder="08xxxxxxxxxx"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">Alamat Pasien</label>
-                        <input type="text" x-model="pasienAlamat" placeholder="Jl. ..."
-                               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">No. HP Pasien</label>
+                            <input type="text" x-model="pasienNoHp" placeholder="08xxxxxxxxxx"
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">Alamat Pasien</label>
+                            <input type="text" x-model="pasienAlamat" placeholder="Jl. ..."
+                                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500">
+                        </div>
                     </div>
                 </div>
 
-                <!-- Nama Pelanggan Reguler (opsional, text field) -->
-                <div x-show="tipePenjualan === 'reguler'" x-cloak class="mt-3">
+                <!-- Nama Pelanggan (always visible when not resep mode) -->
+                <div x-show="!modeResep" x-cloak class="mt-3">
                     <label class="block text-xs font-medium text-gray-500 mb-1">Nama Pelanggan <span class="text-gray-400">(opsional)</span></label>
-                    <input type="text" x-model="pasienNama" placeholder="Kosongkan jika umum..."
+                    <input type="text" x-model="namaPelanggan" placeholder="Kosongkan jika umum..."
                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
             </div>
@@ -287,6 +351,9 @@
         </div>
     </div>
 
+    <!-- Hidden Print Iframe -->
+    <iframe id="print-frame" style="display:none; position:absolute; width:0; height:0; border:0;"></iframe>
+
     <!-- Success Modal -->
     <div x-show="showSuccessModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
         <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 text-center">
@@ -315,11 +382,13 @@ function posApp() {
     return {
         products: @json($products),
         cart: [],
+        resepCart: [],
+        modeResep: false,
         searchQuery: '',
         filteredProducts: [],
-        tipePenjualan: 'reguler',
         customerId: '',
         namaDokter: '',
+        namaPelanggan: '',
         // Data pasien resep
         pasienNama: '',
         pasienNoHp: '',
@@ -379,19 +448,32 @@ function posApp() {
         },
 
         addToCart(product) {
-            const existing = this.cart.find(item => item.product_id === product.id);
-            if (existing) {
-                if (existing.jumlah < product.stok) {
-                    existing.jumlah++;
-                    this.calculateSubtotal(this.cart.indexOf(existing));
-                } else {
-                    alert('Stok tidak mencukupi!');
-                }
+            // If in resep mode, add to resep cart instead
+            if (this.modeResep) {
+                this.addToResepCart(product);
                 return;
             }
 
-            const tipeHarga = this.tipePenjualan === 'resep' ? 'resep' : 'hv';
-            const harga = tipeHarga === 'resep' ? parseFloat(product.harga_resep) : parseFloat(product.harga_hv);
+            const existing = this.cart.find(item => item.product_id === product.id && !item.is_resep);
+            if (existing) {
+                if (existing.jumlah >= product.stok) {
+                    if (!confirm(`Stok ${product.nama_barang} akan MINUS (tersedia: ${product.stok}). Lanjutkan?`)) {
+                        return;
+                    }
+                }
+                existing.jumlah++;
+                this.calculateSubtotal(this.cart.indexOf(existing));
+                return;
+            }
+
+            // Warn if stock is 0 or less
+            if (product.stok <= 0) {
+                if (!confirm(`Stok ${product.nama_barang} HABIS (stok: ${product.stok}). Lanjutkan dengan stok minus?`)) {
+                    return;
+                }
+            }
+
+            const harga = parseFloat(product.harga_hv);
 
             this.cart.push({
                 product_id: product.id,
@@ -401,17 +483,136 @@ function posApp() {
                 harga_hv: parseFloat(product.harga_hv),
                 harga_resep: parseFloat(product.harga_resep),
                 harga_satuan: harga,
-                tipe_harga: tipeHarga,
+                tipe_harga: 'hv',
                 jumlah: 1,
                 diskon_tipe: 'persen',
                 diskon_value: 0,
                 diskon_persen: 0,
                 subtotal: harga,
+                is_resep: false,
             });
 
             this.searchQuery = '';
             this.filteredProducts = [];
             this.$refs.searchInput.focus();
+        },
+
+        // Resep cart methods
+        addToResepCart(product) {
+            const existing = this.resepCart.find(item => item.product_id === product.id);
+            if (existing) {
+                if (existing.jumlah >= product.stok) {
+                    if (!confirm(`Stok ${product.nama_barang} akan MINUS (tersedia: ${product.stok}). Lanjutkan?`)) {
+                        return;
+                    }
+                }
+                existing.jumlah++;
+                this.calculateResepSubtotal(this.resepCart.indexOf(existing));
+                return;
+            }
+
+            // Warn if stock is 0 or less
+            if (product.stok <= 0) {
+                if (!confirm(`Stok ${product.nama_barang} HABIS (stok: ${product.stok}). Lanjutkan dengan stok minus?`)) {
+                    return;
+                }
+            }
+
+            this.resepCart.push({
+                product_id: product.id,
+                kode_barang: product.kode_barang,
+                nama_barang: product.nama_barang,
+                stok: product.stok,
+                harga_satuan: parseFloat(product.harga_resep),
+                jumlah: 1,
+                subtotal: parseFloat(product.harga_resep),
+            });
+
+            this.searchQuery = '';
+            this.filteredProducts = [];
+            this.$refs.searchInput.focus();
+        },
+
+        get resepTotal() {
+            return this.resepCart.reduce((sum, item) => sum + item.subtotal, 0);
+        },
+
+        calculateResepSubtotal(index) {
+            const item = this.resepCart[index];
+            item.subtotal = item.harga_satuan * item.jumlah;
+        },
+
+        increaseResepQty(index) {
+            const item = this.resepCart[index];
+            if (item.jumlah < item.stok) {
+                item.jumlah++;
+                this.calculateResepSubtotal(index);
+            }
+        },
+
+        decreaseResepQty(index) {
+            const item = this.resepCart[index];
+            if (item.jumlah > 1) {
+                item.jumlah--;
+                this.calculateResepSubtotal(index);
+            }
+        },
+
+        removeFromResepCart(index) {
+            this.resepCart.splice(index, 1);
+        },
+
+        clearResepCart() {
+            if (confirm('Kosongkan racikan resep?')) {
+                this.resepCart = [];
+            }
+        },
+
+        confirmResep() {
+            if (this.resepCart.length === 0) {
+                alert('Belum ada obat di racikan resep!');
+                return;
+            }
+            if (!this.pasienNama.trim()) {
+                alert('Nama pasien wajib diisi untuk resep!');
+                return;
+            }
+
+            const totalResep = this.resepTotal;
+            const resepItems = this.resepCart.map(item => ({
+                product_id: item.product_id,
+                jumlah: item.jumlah,
+                harga_satuan: item.harga_satuan,
+            }));
+
+            // Add single "Resep" item to main cart
+            this.cart.push({
+                product_id: null,
+                kode_barang: 'RESEP',
+                nama_barang: 'Resep - ' + this.pasienNama,
+                stok: 999,
+                harga_hv: totalResep,
+                harga_resep: totalResep,
+                harga_satuan: totalResep,
+                tipe_harga: 'resep',
+                jumlah: 1,
+                diskon_tipe: 'persen',
+                diskon_value: 0,
+                diskon_persen: 0,
+                subtotal: totalResep,
+                is_resep: true,
+                resep_items: resepItems,
+                resep_pasien_nama: this.pasienNama,
+                resep_pasien_no_hp: this.pasienNoHp,
+                resep_pasien_alamat: this.pasienAlamat,
+            });
+
+            // Clear resep cart and switch back to reguler mode
+            this.resepCart = [];
+            this.modeResep = false;
+            this.pasienNama = '';
+            this.pasienNoHp = '';
+            this.pasienAlamat = '';
         },
 
         updateItemPrice(index) {
@@ -461,12 +662,7 @@ function posApp() {
             }
         },
 
-        setAllToResep() {
-            this.cart.forEach((item, index) => {
-                item.tipe_harga = 'resep';
-                this.updateItemPrice(index);
-            });
-        },
+
 
         // Autocomplete pasien resep
         async searchPasien() {
@@ -503,30 +699,44 @@ function posApp() {
                 alert('Pembayaran kurang!');
                 return;
             }
-            // Validasi pasien resep
-            if (this.tipePenjualan === 'resep' && !this.pasienNama.trim()) {
-                alert('Nama pasien wajib diisi untuk penjualan resep!');
-                return;
-            }
 
             this.processing = true;
 
+            // Build items: regular items + expanded resep items
+            const items = [];
+            const resepGroups = [];
+
+            this.cart.forEach(item => {
+                if (item.is_resep && item.resep_items) {
+                    // Resep: send individual products for stock deduction
+                    resepGroups.push({
+                        items: item.resep_items,
+                        pasien_nama: item.resep_pasien_nama,
+                        pasien_no_hp: item.resep_pasien_no_hp,
+                        pasien_alamat: item.resep_pasien_alamat,
+                        total: item.harga_satuan,
+                        diskon_persen: item.diskon_persen || 0,
+                    });
+                } else {
+                    items.push({
+                        product_id: item.product_id,
+                        jumlah: item.jumlah,
+                        tipe_harga: 'hv',
+                        diskon_persen: item.diskon_persen,
+                    });
+                }
+            });
+
             const data = {
-                items: this.cart.map(item => ({
-                    product_id: item.product_id,
-                    jumlah: item.jumlah,
-                    tipe_harga: item.tipe_harga,
-                    diskon_persen: item.diskon_persen,
-                })),
+                items: items,
+                resep_groups: resepGroups,
                 bayar: this.metodeBayar === 'non_tunai' ? this.grandTotal : this.bayar,
                 metode_bayar: this.metodeBayar,
-                tipe_penjualan: this.tipePenjualan,
+                tipe_penjualan: 'reguler',
                 customer_id: this.customerId || null,
                 referensi_bayar: this.referensiBayar,
                 nama_dokter: this.namaDokter,
-                pasien_nama: this.pasienNama || null,
-                pasien_no_hp: this.pasienNoHp || null,
-                pasien_alamat: this.pasienAlamat || null,
+                nama_pelanggan: this.namaPelanggan || null,
             };
 
             try {
@@ -560,16 +770,24 @@ function posApp() {
 
         printReceipt() {
             if (this.lastSaleId) {
-                window.open('/sales/' + this.lastSaleId + '/print', '_blank');
+                const frame = document.getElementById('print-frame');
+                frame.src = '/sales/' + this.lastSaleId + '/print';
+                frame.onload = function() {
+                    frame.contentWindow.focus();
+                    frame.contentWindow.print();
+                };
             }
         },
 
         newTransaction() {
             this.cart = [];
+            this.resepCart = [];
+            this.modeResep = false;
             this.bayar = 0;
             this.kembalian = 0;
             this.customerId = '';
             this.namaDokter = '';
+            this.namaPelanggan = '';
             this.pasienNama = '';
             this.pasienNoHp = '';
             this.pasienAlamat = '';

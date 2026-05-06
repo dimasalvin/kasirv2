@@ -104,7 +104,16 @@
                         <td class="py-2 px-3 font-mono text-xs">{{ $sale->no_nota }}</td>
                         <td class="py-2 px-3">{{ $sale->tanggal->format('d/m/Y') }} {{ $sale->jam }}</td>
                         <td class="py-2 px-3 text-center capitalize">{{ $sale->shift }}</td>
-                        <td class="py-2 px-3 text-center capitalize">{{ $sale->tipe_penjualan }}</td>
+                        <td class="py-2 px-3 text-center">
+                            @if($sale->details->where('tipe_harga', 'resep')->count() > 0 && $sale->details->where('tipe_harga', 'hv')->count() > 0)
+                                <span class="text-xs text-indigo-600">HV+Resep</span>
+                            @elseif($sale->details->where('tipe_harga', 'resep')->count() > 0)
+                                <span class="text-xs text-purple-600">Resep</span>
+                            @else
+                                <span class="text-xs text-blue-600">HV</span>
+                            @endif
+                            @if($sale->has_stok_minus)<span class="text-red-500 ml-1" title="Stok minus">⚠</span>@endif
+                        </td>
                         <td class="py-2 px-3 text-center">{{ $sale->metode_bayar == 'tunai' ? 'Tunai' : 'Non Tunai' }}</td>
                         <td class="py-2 px-3">{{ $sale->user->name ?? '-' }}</td>
                         <td class="py-2 px-3 text-right font-medium">Rp {{ number_format($sale->grand_total, 0, ',', '.') }}</td>

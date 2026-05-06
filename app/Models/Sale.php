@@ -25,6 +25,7 @@ class Sale extends Model
         'metode_bayar',
         'referensi_bayar',
         'status',
+        'has_stok_minus',
         'catatan',
         'nama_dokter',
         'pasien_nama',
@@ -60,17 +61,21 @@ class Sale extends Model
     public static function generateNoNota(): string
     {
         $today = now()->format('Ymd');
-        $lastSale = self::where('no_nota', 'like', "INV-{$today}%")
-            ->orderBy('no_nota', 'desc')
+        $prefix = "INV-{$today}-";
+
+        $lastSale = self::where('no_nota', 'like', "{$prefix}%")
+            ->lockForUpdate()
+            ->orderByRaw('CAST(SUBSTRING(no_nota, ' . (strlen($prefix) + 1) . ') AS UNSIGNED) DESC')
             ->first();
 
         if ($lastSale) {
-            $lastNumber = (int) substr($lastSale->no_nota, -4);
+            $suffix = substr($lastSale->no_nota, strlen($prefix));
+            $lastNumber = (int) $suffix;
             $newNumber = $lastNumber + 1;
         } else {
             $newNumber = 1;
         }
 
-        return "INV-{$today}-" . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
+        return $prefix . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
     }
 }
